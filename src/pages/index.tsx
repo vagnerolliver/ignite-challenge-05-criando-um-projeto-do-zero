@@ -1,5 +1,7 @@
-import { FiUser, FiArchive } from 'react-icons/fi';
+import { FiUser, FiCalendar } from 'react-icons/fi';
+import Prismic from '@prismicio/client';
 import { GetStaticProps } from 'next';
+import Link from 'next/link';
 import { useState } from 'react';
 
 import { getPrismicClient } from '../services/prismic';
@@ -28,15 +30,12 @@ interface HomeProps {
   postsPagination: PostPagination;
 }
 
-export default function Home({
-  next_page,
-  results,
-}: PostPagination): JSX.Element {
-  const [posts, setPosts] = useState<Post[]>(results);
-  const [nextPage, setNextPage] = useState(next_page);
+export default function Home({ postsPagination }: HomeProps): JSX.Element {
+  const [posts, setPosts] = useState<Post[]>(postsPagination.results);
+  const [nextPage, setNextPage] = useState(postsPagination.next_page);
 
   function loadMorePosts(): void {
-    fetch(next_page)
+    fetch(nextPage)
       .then(response => response.json())
       .then((data: PostPagination) => {
         setPosts([...posts, ...data.results]);
@@ -50,15 +49,19 @@ export default function Home({
       <div className={commonStyles.container}>
         <div className={styles.HomeContent}>
           {posts.map(post => (
-            <a key={post.uid}>
-              <strong>{post.data.title}</strong>
-              <p>{post.data.subtitle}</p>
-              <span>
-                <FiUser />
-                {formatDatePtBR(new Date(post.first_publication_date))}
-                <FiArchive /> {post.data.author}
-              </span>
-            </a>
+            <Link href={`/post/${post.uid}`} key={post.uid}>
+              <a>
+                <strong>{post.data.title}</strong>
+                <p>{post.data.subtitle}</p>
+                <span>
+                  <FiUser />
+                  <time>
+                    {formatDatePtBR(new Date(post.first_publication_date))}
+                  </time>
+                  <FiCalendar /> {post.data.author}
+                </span>
+              </a>
+            </Link>
           ))}
         </div>
 
@@ -76,14 +79,34 @@ export default function Home({
 
 export const getStaticProps: GetStaticProps = async () => {
   const prismic = getPrismicClient();
-  const postsResponse = await prismic.query('', {
-    pageSize: 1,
+  const postsResponse = await prismic.query(
+    [Prismic.predicates.at('document.type', 'posts')],
+    {
+      orderings: '[document.first_publication_date desc]',
+      fetch: ['posts.title', 'posts.subtitle', 'posts.author'],
+      pageSize: 2,
+    }
+  );
+
+  const posts = postsResponse.results.map(post => {
+    return {
+      uid: post.uid,
+      first_publication_date: post.first_publication_date,
+      data: {
+        title: post.data.title,
+        subtitle: post.data.subtitle,
+        author: post.data.author,
+      },
+    };
   });
 
   return {
     props: {
-      results: postsResponse.results,
-      next_page: postsResponse.next_page,
+      postsPagination: {
+        next_page: postsResponse.next_page,
+        results: posts,
+      },
     },
+    revalidate: 60 * 60 * 24,
   };
 };
