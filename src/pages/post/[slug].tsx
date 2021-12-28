@@ -8,6 +8,7 @@ import Head from 'next/head';
 
 // import { render } from '@testing-library/react';
 
+import { useEffect, useState } from 'react';
 import { getPrismicClient } from '../../services/prismic';
 import { formatDatePtBR } from '../../helpers/datePtBR';
 import Header from '../../components/Header';
@@ -15,6 +16,12 @@ import Header from '../../components/Header';
 import commonStyles from '../../styles/common.module.scss';
 import styles from './post.module.scss';
 
+interface PostContent {
+  heading: string;
+  body: {
+    text: string;
+  }[];
+}
 interface Post {
   first_publication_date: string | null;
   data: {
@@ -23,12 +30,7 @@ interface Post {
       url: string;
     };
     author: string;
-    content: {
-      heading: string;
-      body: {
-        text: string;
-      }[];
-    }[];
+    content: PostContent[];
   };
 }
 
@@ -38,6 +40,28 @@ interface PostProps {
 
 export default function Post({ post }: PostProps): JSX.Element {
   const router = useRouter();
+  const [readingTime, setReadingTime] = useState<number>();
+
+  function averageReadingTime(): number {
+    const totalWords = post.data.content.reduce((accWords, postContent) => {
+      let postHeading = 0;
+      let postBody = 0;
+
+      if (postContent.heading) {
+        postHeading = postContent.heading.trim().split(/\s+/).length;
+      }
+
+      if (RichText.asText(postContent.body)) {
+        postBody = RichText.asText(postContent.body).trim().split(/\s+/).length;
+      }
+
+      return accWords + postHeading + postBody;
+    }, 0);
+
+    const wordsPerMinute = 200;
+
+    return Math.ceil(totalWords / wordsPerMinute);
+  }
 
   if (router.isFallback) {
     return <div>Carregando...</div>;
@@ -70,7 +94,7 @@ export default function Post({ post }: PostProps): JSX.Element {
               <FiCalendar /> {post.data.author}
             </p>
             <p>
-              <FiClock />
+              <FiClock /> {averageReadingTime()} min
             </p>
           </span>
 
